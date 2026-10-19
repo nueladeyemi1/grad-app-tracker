@@ -47,6 +47,35 @@ function hasApplied(status: Status | undefined) {
   return status ? APPLIED_STATUSES.includes(status) : false
 }
 
+function JobPager({
+  page,
+  pageCount,
+  loading,
+  onPage,
+}: {
+  page: number
+  pageCount: number
+  loading: boolean
+  onPage: (next: number) => void
+}) {
+  if (pageCount <= 1) return null
+  return (
+    <div className="pager">
+      <span>
+        Page {page + 1} of {pageCount}. Search and closing soon use this page.
+      </span>
+      <div className="pager-actions">
+        <button type="button" disabled={page <= 0 || loading} onClick={() => onPage(page - 1)}>
+          Previous
+        </button>
+        <button type="button" disabled={page + 1 >= pageCount || loading} onClick={() => onPage(page + 1)}>
+          Next
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const initial = loadStore()
   const [profile, setProfile] = useState<Profile>(initial.profile)
@@ -66,8 +95,16 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [reload, setReload] = useState(0)
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(48)
   const fileRef = useRef<HTMLInputElement>(null)
   const interestKey = profile.interests.join("|")
+  const filterKey = `${profile.course}|${interestKey}|${showAll ? "1" : "0"}`
+  const [seenFilter, setSeenFilter] = useState(filterKey)
+  if (seenFilter !== filterKey) {
+    setSeenFilter(filterKey)
+    if (page !== 0) setPage(0)
+  }
 
   useEffect(() => {
     saveStore({ version: 1, profile, applications: apps })
@@ -79,13 +116,14 @@ export default function App() {
       setLoading(true)
       setError("")
       void fetchLiveJobs(
-        { course: profile.course, interests: profile.interests, broad: showAll },
+        { course: profile.course, interests: profile.interests, broad: showAll, offset: page * pageSize },
         controller.signal,
       )
         .then((payload) => {
           setSchemes(payload.schemes)
           setTotal(payload.total)
           setFetchedAt(payload.fetchedAt)
+          if (payload.limit > 0) setPageSize(payload.limit)
         })
         .catch((reason: unknown) => {
           if (reason instanceof DOMException && reason.name === "AbortError") return
@@ -99,9 +137,12 @@ export default function App() {
       controller.abort()
       window.clearTimeout(timer)
     }
-  }, [profile.course, interestKey, showAll, reload])
+  }, [profile.course, interestKey, showAll, reload, page, pageSize])
 
   const hasCourse = profile.course !== "" && profile.course !== "Other / not listed"
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const rangeStart = schemes.length === 0 ? 0 : page * pageSize + 1
+  const rangeEnd = page * pageSize + schemes.length
 
   const ranked = useMemo(() => {
     return schemes
@@ -273,7 +314,7 @@ export default function App() {
               {loading
                 ? "Fetching live listings from targetjobs…"
                 : fetchedAt
-                  ? `Live from targetjobs · ${schemes.length} of ${total} · fetched ${new Date(fetchedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. Confirm every deadline on the employer page.`
+                  ? `Live from targetjobs · ${rangeStart}–${rangeEnd} of ${total} · fetched ${new Date(fetchedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}. Confirm every deadline on the employer page.`
                   : "Listings are fetched live from targetjobs. Confirm every deadline on the employer page."}
             </p>
           </div>
@@ -349,6 +390,16 @@ export default function App() {
                 </p>
               )}
 
+              <JobPager
+                page={page}
+                pageCount={pageCount}
+                loading={loading}
+                onPage={(next) => {
+                  setPage(next)
+                  document.querySelector(".view-bar")?.scrollIntoView({ block: "start" })
+                }}
+              />
+
               {closingSoon.length > 0 ? (
                 <section className="soon" aria-label="Closing soon">
                   <h2>Closing soon</h2>
@@ -381,23 +432,32 @@ export default function App() {
                     const tone = deadlineTone(scheme.deadline)
                     return (
                       <li key={scheme.id} className="card">
-                        <div className="card-top">
-                          <div>
-                            <p className="employer">{scheme.employer}</p>
-                            <h2>{scheme.programme}</h2>
+                        <button
+                          type="button"
+                          className="card-open"
+                          onClick={() => {
+                            setFocusPrompt(false)
+                            setSelectedId(scheme.id)
+                          }}
+                        >
+                          <div className="card-top">
+                            <div>
+                              <p className="employer">{scheme.employer}</p>
+                              <h2>{scheme.programme}</h2>
+                            </div>
+                            <p className={`fit fit-${fitLabel(fit.score).split(" ")[0].toLowerCase()}`}>
+                              <strong>{fit.score}</strong>
+                              <span>{fitLabel(fit.score)}</span>
+                            </p>
                           </div>
-                          <p className={`fit fit-${fitLabel(fit.score).split(" ")[0].toLowerCase()}`}>
-                            <strong>{fit.score}</strong>
-                            <span>{fitLabel(fit.score)}</span>
-                          </p>
-                        </div>
-                        <p className="summary">{scheme.summary}</p>
-                        <div className="meta">
-                          <span className={`deadline-chip ${tone}`}>{deadlineChip(scheme.deadline, scheme.deadlineDetail)}</span>
-                          <span>{scheme.locations.join(" · ")}</span>
-                          {application ? <span className="badge">{STATUS_LABEL[application.status]}</span> : null}
-                        </div>
-                        {fit.reasons.length > 0 ? <p className="reasons">{fit.reasons.join(" · ")}</p> : null}
+                          <p className="summary">{scheme.summary}</p>
+                          <div className="meta">
+                            <span className={`deadline-chip ${tone}`}>{deadlineChip(scheme.deadline, scheme.deadlineDetail)}</span>
+                            <span>{scheme.locations.join(" · ")}</span>
+                            {application ? <span className="badge">{STATUS_LABEL[application.status]}</span> : null}
+                          </div>
+                          {fit.reasons.length > 0 ? <p className="reasons">{fit.reasons.join(" · ")}</p> : null}
+                        </button>
                         <div className="card-actions">
                           {applied ? (
                             <button type="button" className="primary" onClick={() => setSelectedId(scheme.id)}>
@@ -433,6 +493,15 @@ export default function App() {
                   })}
                 </ul>
               )}
+              <JobPager
+                page={page}
+                pageCount={pageCount}
+                loading={loading}
+                onPage={(next) => {
+                  setPage(next)
+                  document.querySelector(".view-bar")?.scrollIntoView({ block: "start" })
+                }}
+              />
             </>
           ) : (
             <section className="tracker">

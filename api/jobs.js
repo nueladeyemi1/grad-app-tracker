@@ -12,6 +12,7 @@ function queryOf(req) {
     course: first(query.course) || fromUrl.get("course") || "",
     interests: first(query.interests) || fromUrl.get("interests") || "",
     broad: first(query.broad) || fromUrl.get("broad") || "",
+    offset: first(query.offset) || fromUrl.get("offset") || "",
   }
 }
 
@@ -30,9 +31,10 @@ export default async function handler(req, res) {
     .map((item) => item.trim())
     .filter(Boolean)
   const broad = query.broad === "1"
+  const offset = Number(query.offset) || 0
 
   try {
-    const payload = await searchLiveJobs({ course, interests, broad })
+    const payload = await searchLiveJobs({ course, interests, broad, offset })
     res.setHeader("Cache-Control", "public, s-maxage=600, stale-while-revalidate=1800")
     res.status(200).json(payload)
   } catch {

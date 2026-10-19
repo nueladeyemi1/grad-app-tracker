@@ -76,9 +76,11 @@ export function SchemeDetail({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="dialog-top">
-          <p className="eyebrow">{scheme.employer}</p>
-          <h2 id="detail-title">{scheme.programme}</h2>
-          <button type="button" className="text-button" onClick={onClose}>
+          <div>
+            <p className="eyebrow">{scheme.employer}</p>
+            <h2 id="detail-title">{scheme.programme}</h2>
+          </div>
+          <button type="button" className="close-button" onClick={onClose}>
             Close
           </button>
         </div>

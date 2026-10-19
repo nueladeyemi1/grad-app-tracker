@@ -14,7 +14,8 @@ function liveJobsPlugin(): Plugin {
         .map((item) => item.trim())
         .filter(Boolean)
       const broad = url.searchParams.get("broad") === "1"
-      void searchLiveJobs({ course, interests, broad })
+      const offset = Number(url.searchParams.get("offset")) || 0
+      void searchLiveJobs({ course, interests, broad, offset })
         .then((payload) => {
           res.statusCode = 200
           res.setHeader("Content-Type", "application/json")

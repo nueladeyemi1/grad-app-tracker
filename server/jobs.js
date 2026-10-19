@@ -1,6 +1,7 @@
 const SEARCH_URL = "https://targetjobs.co.uk/ext/svc/inferno-search-service-1-0/search"
 const CACHE_MS = 10 * 60 * 1000
 const LIMIT = 48
+const MAX_OFFSET = 4800
 
 const COURSE_KEYS = {
   "Computer Science": ["computer science", "software engineering"],
@@ -259,8 +260,15 @@ function toScheme(doc, course) {
   }
 }
 
+function cleanOffset(value) {
+  const offset = Number(value)
+  if (!Number.isFinite(offset) || offset < 0) return 0
+  return Math.min(MAX_OFFSET, Math.floor(offset))
+}
+
 async function loadLiveJobs(input) {
   const keys = keysFor(input)
+  const offset = cleanOffset(input.offset)
   const response = await fetch(SEARCH_URL, {
     method: "POST",
     headers: {
@@ -271,7 +279,7 @@ async function loadLiveJobs(input) {
     body: JSON.stringify({
       keys,
       limit: LIMIT,
-      offset: 0,
+      offset,
       includePromoted: false,
       returnUnpublishedContent: false,
       hostContentOnly: true,
@@ -307,7 +315,9 @@ async function loadLiveJobs(input) {
 
   return {
     fetchedAt: new Date().toISOString(),
-    total: Number(data.search?.result_count) || schemes.length,
+    total: Number(data.search?.result_count) || offset + schemes.length,
+    limit: LIMIT,
+    offset,
     source: "targetjobs",
     query: keys,
     schemes,
@@ -318,10 +328,11 @@ export async function searchLiveJobs(input) {
   const course = COURSE_KEYS[input.course] ? input.course : ""
   const interests = (Array.isArray(input.interests) ? input.interests : []).filter((interest) => INTEREST_KEYS[interest])
   const broad = Boolean(input.broad)
-  const key = JSON.stringify({ course, interests, broad })
+  const offset = cleanOffset(input.offset)
+  const key = JSON.stringify({ course, interests, broad, offset })
   const hit = cache.get(key)
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.value
-  const value = await loadLiveJobs({ course, interests, broad })
+  const value = await loadLiveJobs({ course, interests, broad, offset })
   cache.set(key, { at: Date.now(), value })
   return value
 }
