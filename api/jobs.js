@@ -5,18 +5,31 @@ function first(value) {
   return typeof value === "string" ? value : ""
 }
 
+function queryOf(req) {
+  const fromUrl = new URL(req.url || "/", "https://localhost").searchParams
+  const query = req.query ?? {}
+  return {
+    course: first(query.course) || fromUrl.get("course") || "",
+    interests: first(query.interests) || fromUrl.get("interests") || "",
+    broad: first(query.broad) || fromUrl.get("broad") || "",
+  }
+}
+
+export const config = { runtime: "nodejs" }
+
 export default async function handler(req, res) {
   if (req.method && req.method !== "GET") {
     res.status(405).json({ error: "Use GET" })
     return
   }
 
-  const course = first(req.query?.course)
-  const interests = first(req.query?.interests)
+  const query = queryOf(req)
+  const course = query.course
+  const interests = query.interests
     .split("|")
     .map((item) => item.trim())
     .filter(Boolean)
-  const broad = first(req.query?.broad) === "1"
+  const broad = query.broad === "1"
 
   try {
     const payload = await searchLiveJobs({ course, interests, broad })

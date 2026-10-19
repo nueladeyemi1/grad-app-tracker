@@ -289,7 +289,7 @@ async function loadLiveJobs(input) {
         ],
       },
     }),
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(8000),
   })
 
   if (!response.ok) throw new Error(`Listing search failed (${response.status})`)
